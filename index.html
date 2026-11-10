@@ -292,7 +292,7 @@ function mat(c,o){return vac()?new T3.MeshStandardMaterial({color:c,metalness:0.
 function V(x,y,z){return new T3.Vector3(x,y,z);}
 function initThree(){var cv=$('three');renderer=new T3.WebGLRenderer({canvas:cv,antialias:true,alpha:true});renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
   scene=new T3.Scene();camera=new T3.PerspectiveCamera(34,1,0.1,400);scene.add(new T3.AmbientLight(0xffffff,0.62));var d=new T3.DirectionalLight(0xffffff,0.75);d.position.set(-6,10,8);scene.add(d);bindOrbit(cv);}
-function addG(o){scene.add(o);G3.push(o);return o;}
+function addG(o){scene.add(o);G3.push(o);if(o.material&&o.material.opacity!==undefined)o.userData.o0=o.material.opacity;return o;}
 function clear3D(){G3.forEach(function(o){scene.remove(o);});G3=[];POOL.forEach(function(o){scene.remove(o);});POOL=[];TAGS.forEach(function(t){if(t.el)t.el.remove();});TAGS=[];}
 /* deterministic particles for one laser shot */
 function rng(seed){var s=seed>>>0||1;return function(){s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
@@ -303,7 +303,7 @@ function makeParticles(){var r=rng(11),P=[],shot=PART==='how',nA=shot?6:Math.rou
   for(var i=0;i<nM;i++){var role=r();P.push({k:'m',vx:1.1+2.6*r(),vy:(r()-0.5)*2.4,vz:(r()-0.5)*2.4,pos:role<0.32?1:role<0.47?-1:0,mz:mz.length?mz[Math.floor(r()*mz.length)].mz:200,cl:r()<0.25});}
   for(var j=0;j<nA;j++)P.push({k:'a',vx:0.9+1.6*r(),vy:(r()-0.5)*1.6,vz:(r()-0.5)*1.6,pos:1,mz:an?an.mz:C.M+MH,frag:!shot&&r()<C.frag});
   PTS=P;}
-function build3D(){clear3D();if(PART==='game')return;var v=vac();
+function build3D(){clear3D();var v=vac();
   var plate=new T3.Mesh(new T3.BoxGeometry(0.3,5,5),mat(v?0x9AA7B3:0x8A96A3));plate.position.set(XP-0.15,0,0);addG(plate);tag('target plate: +20 kV',V(XP-0.2,2.8,0));
   var cr=rng(5);for(var i=0;i<34;i++){var a=cr()*6.28,rr=Math.sqrt(cr())*0.95,c=new T3.Mesh(new T3.BoxGeometry(0.08,0.16+0.18*cr(),0.16+0.18*cr()),mat(v?0xE8D9B0:0xF0E2B8));c.position.set(XP+0.04,rr*Math.sin(a),rr*Math.cos(a));c.rotation.x=cr()*3;c.userData.crystal=true;c.userData.ci=i/34;addG(c);}
   for(var k=0;k<5;k++){var a2=cr()*6.28,r2=Math.sqrt(cr())*0.7,s=new T3.Mesh(new T3.SphereGeometry(0.11,12,9),new T3.MeshBasicMaterial({color:new T3.Color(col(2))}));s.position.set(XP+0.06,r2*Math.sin(a2),r2*Math.cos(a2));s.userData.crystal=true;s.userData.ci=0.3+0.7*k/5;addG(s);}
@@ -317,10 +317,13 @@ function build3D(){clear3D();if(PART==='game')return;var v=vac();
   var lp=[V(-1.2,4.6,3.6),V(SPOT[0],SPOT[1],SPOT[2])];LASER=new T3.Mesh(new T3.CylinderGeometry(0.14,0.14,lp[0].distanceTo(lp[1]),16,1,true),new T3.MeshBasicMaterial({color:new T3.Color(vac()?'#B49CFF':'#6A3FD1'),transparent:true,opacity:0.55}));
   LASER.position.copy(lp[0].clone().add(lp[1]).multiplyScalar(0.5));LASER.quaternion.setFromUnitVectors(V(0,1,0),lp[1].clone().sub(lp[0]).normalize());addG(LASER);tag('UV laser pulse ('+S.lam+' nm)',V(-1.6,4.4,3.4),'las');
   tag('field',V((XP+XG)/2,-2.2,0));
-  makeParticles();DIRTY=true;}
+  applyPart(PART);makeParticles();DIRTY=true;}
+var PV={how:[1.4,0,17.2],laser:[XP+1.6,0.3,6.4],spec:[XD-3.4,0,9.6],cmp:[1.4,0,17.2],game:[1.4,0,17.2]};
+function applyPart(p){var v=PV[p]||PV.how;CAM.tx=v[0];CAM.ty=v[1];CAM.hw=v[2]/2;CAM.d=v[2]*1.45;CAM.zoom=1;
+  G3.forEach(function(o){if(!o.material||o.userData.o0===undefined)return;o.material.transparent=true;o.material.opacity=p==='game'?o.userData.o0*0.22:o.userData.o0;});DIRTY=true;}
 /* ---- particle positions from the timeline (tau in 0..1) ---- */
 function ease(t){return 1-Math.exp(-t/0.06);}
-function syncScene(tau){if(PART==='game'||!LASER)return;var shot=PART==='how';
+function syncScene(tau){if(!LASER)return;if(PART==='game'){POOL.forEach(function(m){m.visible=false;});if(DROP)DROP.visible=false;LASER.visible=false;TAGS.forEach(function(t){t.hide=true;});return;}var shot=PART==='how';
   var dry=clamp((tau-0.03)/(T_DRY-0.03),0,1);DROP.visible=shot&&tau<T_DRY;DROP.scale.set(1-0.9*dry,1-0.9*dry,1-0.9*dry);
   /* crystals grow as the droplet dries; the analyte ends up trapped inside them */
   G3.forEach(function(o){if(o.userData&&o.userData.crystal)o.visible=!shot||dry>=(o.userData.ci||0);});
@@ -447,7 +450,7 @@ var lastT=0,lastDraw=0;function loop(t){var dt=Math.min(0.1,(t-lastT)/1000);last
     syncScene(TAU);DIRTY=true;if(t-lastDraw>120){lastDraw=t;drawSpectrum();if(PART==='how'){drawDiag();status();}tread();}}
   if(DIRTY&&renderer){placeCam();renderer.render(scene,camera);tags();DIRTY=false;}requestAnimationFrame(loop);}
 function setPart(p){if(p===PART)return;PART=p;PLAY=p!=='game';STEP=0;STOPAT=null;TAU=p==='how'?0:T_LAS-0.12;document.querySelectorAll('.parts button[data-part]').forEach(function(b){if(b.dataset.part===p)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-  if(p==='game'){clear3D();if(!GM.q)newRound();renderCtl();refresh();}else{CAM.zoom=1;rerun(true);renderCtl();}history.replaceState(null,'','#'+p);}
+  if(p==='game'){if(!GM.q)newRound();build3D();renderCtl();refresh();}else{CAM.zoom=1;rerun(true);renderCtl();}history.replaceState(null,'','#'+p);}
 function setLook(l){document.documentElement.setAttribute('data-look',l);$('lookA').setAttribute('aria-pressed',String(l==='figure'));$('lookB').setAttribute('aria-pressed',String(l==='vacuum'));if(PART!=='game')build3D();renderCtl();refresh();}
 var SCROLLQ='(max-width:900px) and (orientation:portrait),(max-width:700px) and (min-height:541px)',LANDQ='(orientation:landscape) and (max-height:540px)',EQCLOSED=false;
 function layoutKind(){return window.matchMedia(SCROLLQ).matches?'scroll':(window.matchMedia(LANDQ).matches?'land':'desk');}
